@@ -1,13 +1,21 @@
+import streamlit as st
 import pymongo
 from pymongo import MongoClient
 import traceback
 
-uri = st.secrets["MONGO_URI"]
+print("\n=== DEBUG: STARTING ===")
 
-print("\n=== DEBUG: RAW URI ===")
-print(uri)
+# 0. Load URI safely
+try:
+    uri = st.secrets["MONGO_URI"]
+    print("URI LOADED:", uri)
+except Exception as e:
+    print("ERROR: Could not load st.secrets['MONGO_URI']")
+    print(e)
+    traceback.print_exc()
+    raise SystemExit("Stopping: MONGO_URI not loaded")
 
-# 1. Test DNS / SRV resolution
+# 1. DNS / SRV resolution
 print("\n=== DEBUG: DNS / SRV ===")
 try:
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
@@ -16,16 +24,17 @@ except Exception as e:
     print("DNS ERROR:", e)
     traceback.print_exc()
 
-# 2. Test cluster handshake (no auth yet)
+# 2. Cluster handshake (TLS, firewall, routing)
 print("\n=== DEBUG: CLUSTER HANDSHAKE ===")
 try:
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    print("Handshake OK:", client.server_info())
+    info = client.server_info()
+    print("Handshake OK:", info)
 except Exception as e:
     print("Handshake ERROR:", e)
     traceback.print_exc()
 
-# 3. Test authentication explicitly
+# 3. Authentication test
 print("\n=== DEBUG: AUTHENTICATION ===")
 try:
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
@@ -34,16 +43,15 @@ except Exception as e:
     print("AUTH ERROR:", e)
     traceback.print_exc()
 
-# 4. Test database existence
+# 4. List databases
 print("\n=== DEBUG: DATABASE LIST ===")
 try:
-    client = MongoClient(uri)
     print("Databases:", client.list_database_names())
 except Exception as e:
     print("DB LIST ERROR:", e)
     traceback.print_exc()
 
-# 5. Test ATA database existence
+# 5. ATA database
 print("\n=== DEBUG: ATA DB ===")
 try:
     db = client["ATA"]
@@ -52,7 +60,7 @@ except Exception as e:
     print("ATA ERROR:", e)
     traceback.print_exc()
 
-# 6. Test titles collection existence
+# 6. titles collection
 print("\n=== DEBUG: TITLES COLLECTION ===")
 try:
     titles = db["titles"]
@@ -60,5 +68,3 @@ try:
 except Exception as e:
     print("TITLES ERROR:", e)
     traceback.print_exc()
-
-
