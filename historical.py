@@ -46,42 +46,24 @@ def ci_contains(field: str, value: str):
 # ---------------------------------------------------------
 
 def search_by_name(name: str):
-    """Find documents where Name matches exactly (case-insensitive)."""
     return list(titles.find(ci_exact("Name", name)))
 
-
 def search_by_name_contains(text: str):
-    """Find documents where Name contains text (case-insensitive)."""
     return list(titles.find(ci_contains("Name", text)))
-
 
 def search_by_town(town: str):
     return list(titles.find(ci_exact("Town", town)))
 
-
 def search_by_state(state: str):
     return list(titles.find(ci_exact("State", state)))
-
 
 def search_by_division(division: str):
     return list(titles.find(ci_exact("Division", division)))
 
-
 def search_by_event(event: str):
-    """
-    Events field may be a list or string.
-    This matches case-insensitive anywhere inside the Events field.
-    """
     return list(titles.find(ci_contains("Events", event)))
 
-
-# ---------------------------------------------------------
-#  COMBINED SEARCH (ANY FIELDS)
-# ---------------------------------------------------------
-
 def search_multi(name=None, town=None, state=None, division=None, event=None):
-    """Search using any combination of fields (case-insensitive)."""
-
     query = {}
 
     if name:
@@ -107,12 +89,29 @@ def search_multi(name=None, town=None, state=None, division=None, event=None):
 # ---------------------------------------------------------
 
 def show_results(docs):
-    """Display results in Streamlit as a DataFrame."""
     if not docs:
         st.write("No results found.")
         return
 
     df = pd.DataFrame(docs)
     df = df.drop(columns=["_id"], errors="ignore")
-    st.write(df)
+    st.dataframe(df)
+
+
+# ---------------------------------------------------------
+#  STREAMLIT UI
+# ---------------------------------------------------------
+
+st.title("ATA MongoDB Search")
+
+st.write("Search the ATA State Titles database (2025–2026).")
+
+# Input field
+name = st.text_input("Search by Name (case-insensitive)")
+
+# Run search
+if name:
+    results = search_by_name_contains(name)
+    show_results(results)
+
 
