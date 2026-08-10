@@ -1,70 +1,115 @@
 import streamlit as st
-import pymongo
 from pymongo import MongoClient
-import traceback
+import pandas as pd
 
-print("\n=== DEBUG: STARTING ===")
+# ---------------------------------------------------------
+#  CONNECT TO MONGODB
+# ---------------------------------------------------------
 
-# 0. Load URI safely
-try:
+@st.cache_resource
+def get_mongo():
     uri = st.secrets["MONGO_URI"]
-    print("URI LOADED:", uri)
-except Exception as e:
-    print("ERROR: Could not load st.secrets['MONGO_URI']")
-    print(e)
-    traceback.print_exc()
-    raise SystemExit("Stopping: MONGO_URI not loaded")
+    return MongoClient(uri)
 
-# 1. DNS / SRV resolution
-print("\n=== DEBUG: DNS / SRV ===")
-try:
-    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    print("DNS OK: SRV resolved")
-except Exception as e:
-    print("DNS ERROR:", e)
-    traceback.print_exc()
+client = get_mongo()
 
-# 2. Cluster handshake (TLS, firewall, routing)
-print("\n=== DEBUG: CLUSTER HANDSHAKE ===")
-try:
-    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    info = client.server_info()
-    print("Handshake OK:", info)
-except Exception as e:
-    print("Handshake ERROR:", e)
-    traceback.print_exc()
+# Your database + collection
+db = client["ATA"]
+titles = db["ATA-State-Titles-25-26"]
 
-# 3. Authentication test
-print("\n=== DEBUG: AUTHENTICATION ===")
-try:
-    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    print("PING:", client.admin.command("ping"))
-except Exception as e:
-    print("AUTH ERROR:", e)
-    traceback.print_exc()
 
-# 4. List databases
-print("\n=== DEBUG: DATABASE LIST ===")
-try:
-    print("Databases:", client.list_database_names())
-except Exception as e:
-    print("DB LIST ERROR:", e)
-    traceback.print_exc()
+# ---------------------------------------------------------
+#  CASE-INSENSITIVE SEARCH HELPERS
+# ---------------------------------------------------------
 
-# 5. ATA database
-print("\n=== DEBUG: ATA DB ===")
-try:
-    db = client["ATA"]
-    print("Collections:", db.list_collection_names())
-except Exception as e:
-    print("ATA ERROR:", e)
-    traceback.print_exc()
+def ci_exact(field: str, value: str):
+    """Case-insensitive exact match."""
+    return {
+        field: {
+            "$regex": f"^{value}$",
+            "$options": "i"
+        }
+    }
 
-# 6. titles collection
-print("\n=== DEBUG: TITLES COLLECTION ===")
-try:
-    titles = db["titles"]
-    print("Count:", titles.count_documents({}))
-except Exception as e:
-    print("TITLES ERROR:", e)
-    traceback.print_exc()
+def ci_contains(field: str, value: str):
+    """Case-insensitive substring match."""
+    return {
+        field: {
+            "$regex": value,
+            "$options": "i"
+        }
+    }
+
+
+# ---------------------------------------------------------
+#  SEARCH FUNCTIONS (CASE-INSENSITIVE)
+# ---------------------------------------------------------
+
+def search_by_name(name: str):
+    return list(titles.find(ci_exact("Name", name)))
+
+def search_by_name_contains(text: str):
+    return list(titles.find(ci_contains("Name", text)))
+
+def search_by_town(town: str):
+    return list(titles.find(ci_exact("Town", town)))
+
+def search_by_state(state: str):
+    return list(titles.find(ci_exact("State", state)))
+
+def search_by_division(division: str):
+    return list(titles.find(ci_exact("Division", division)))
+
+def search_by_event(event: str):
+    return list(titles.find(ci_contains("Events", event)))
+
+def search_multi(name=None, town=None, state=None, division=None, event=None):
+    query = {}
+
+    if name:
+        query.update(ci_contains("Name", name))
+
+    if town:
+        query.update(ci_contains("Town", town))
+
+    if state:
+        query.update(ci_exact("State", state))
+
+    if division:
+        query.update(ci_contains("Division", division))
+
+    if event:
+        query.update(ci_contains("Events", event))
+
+    return list(titles.find(query))
+
+
+# ---------------------------------------------------------
+#  STREAMLIT DISPLAY HELPER
+# ---------------------------------------------------------
+
+def show_results(docs):
+    if not docs:
+        st.write("No results found.")
+        return
+
+    df = pd.DataFrame(docs)
+    df = df.drop(columns=["_id"], errors="ignore")
+    st.dataframe(df)
+
+
+# ---------------------------------------------------------
+#  STREAMLIT UI
+# ---------------------------------------------------------
+
+st.title("ATA MongoDB Search")
+
+st.write("Search the ATA State Titles database (2025–2026).")
+
+# Input field
+name = st.text_input("Search by Name (case-insensitive)")
+
+# Run search
+if name:
+    results = search_by_name_contains(name)
+    show_results(results)
