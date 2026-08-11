@@ -42,28 +42,10 @@ def ci_contains(field: str, value: str):
 
 
 # ---------------------------------------------------------
-#  SEARCH FUNCTIONS (CASE-INSENSITIVE)
+#  MULTI-FIELD SEARCH (Name, Town, State, Division)
 # ---------------------------------------------------------
 
-def search_by_name(name: str):
-    return list(titles.find(ci_exact("Name", name)))
-
-def search_by_name_contains(text: str):
-    return list(titles.find(ci_contains("Name", text)))
-
-def search_by_town(town: str):
-    return list(titles.find(ci_exact("Town", town)))
-
-def search_by_state(state: str):
-    return list(titles.find(ci_exact("State", state)))
-
-def search_by_division(division: str):
-    return list(titles.find(ci_exact("Division", division)))
-
-def search_by_event(event: str):
-    return list(titles.find(ci_contains("Events", event)))
-
-def search_multi(name=None, town=None, state=None, division=None, event=None):
+def search_multi(name=None, town=None, state=None, division=None):
     query = {}
 
     if name:
@@ -77,9 +59,6 @@ def search_multi(name=None, town=None, state=None, division=None, event=None):
 
     if division:
         query.update(ci_contains("Division", division))
-
-    if event:
-        query.update(ci_contains("Events", event))
 
     return list(titles.find(query))
 
@@ -95,21 +74,37 @@ def show_results(docs):
 
     df = pd.DataFrame(docs)
     df = df.drop(columns=["_id"], errors="ignore")
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 
 
 # ---------------------------------------------------------
-#  STREAMLIT UI
+#  STREAMLIT UI — PRIMARY FIELD SELECTOR
 # ---------------------------------------------------------
 
 st.title("ATA MongoDB Search")
-
 st.write("Search the ATA State Titles database (2025–2026).")
 
-# Input field
-name = st.text_input("Search by Name (case-insensitive)")
+# User chooses the main search field
+mode = st.radio(
+    "Search by:",
+    ["Town", "Name", "State", "Division"]
+)
+
+# Primary field input
+primary_value = st.text_input(f"{mode} contains")
+
+# Optional filters for the other three fields
+optional_filters = {}
+for field in ["Town", "Name", "State", "Division"]:
+    if field != mode:
+        optional_filters[field] = st.text_input(f"{field} contains (optional)")
 
 # Run search
-if name:
-    results = search_by_name_contains(name)
+if st.button("Search"):
+    results = search_multi(
+        name = primary_value if mode == "Name" else optional_filters["Name"],
+        town = primary_value if mode == "Town" else optional_filters["Town"],
+        state = primary_value if mode == "State" else optional_filters["State"],
+        division = primary_value if mode == "Division" else optional_filters["Division"]
+    )
     show_results(results)
